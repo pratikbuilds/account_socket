@@ -4,25 +4,49 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Async Runtime
 tokio = { version = "1", features = ["full"] }
-warp = { version = "0.4", features = ["server"] }
-anyhow = "1.0.100"
-async-trait = "0.1.89"
-async-tungstenite = "0.31.0"
-env_logger = "0.11.8"
-serde_json = "1.0.145"
-yellowstone-grpc-client = "9.0.0"
-dotenv = "0.15.0"
-carbon-core = "0.10.0"
 
-carbon-drift-v2-decoder = "0.10.0"
+# WebSocket Support
+warp = { version = "0.4", features = ["server"] }
+async-tungstenite = "0.31.0"
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+
+# Database Layer
+sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono", "uuid"] }
+
+# Caching
+redis = { version = "0.24", features = ["tokio-comp"] }
+
+# Serialization
+serde = { version = "1.0.226", features = ["derive"] }
+serde_json = "1.0.145"
+
+# Configuration & Error Handling
+anyhow = "1.0.100"
 thiserror = "2.0.16"
-solana-client = "2.3.10"
+dotenv = "0.15.0"
+
+# Logging
+env_logger = "0.11.8"
+log = "0.4.28"
+tracing-subscriber = "0.3"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Solana & Carbon Ecosystem
+yellowstone-grpc-client = "9.0.0"
+carbon-core = "0.10.0"
+carbon-drift-v2-decoder = "0.10.0"
+carbon-meteora-damm-v2-decoder = "0.10.0"
 carbon-rpc-block-subscribe-datasource = "0.10.0"
 carbon-rpc-program-subscribe-datasource = "0.10.0"
-tracing-subscriber = "0.3"
-carbon-meteora-damm-v2-decoder = "0.10.0"
-log = "0.4.28"
-serde = "1.0.226"
-solana-account-decoder = "2.3.10"
 carbon-log-metrics = "0.10.0"
+solana-client = "2.3.10"
+solana-account-decoder = "2.3.10"
+
+# Async
+async-trait = "0.1.89"

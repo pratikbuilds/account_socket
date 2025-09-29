@@ -8,10 +8,9 @@ use solana_account_decoder::UiAccountEncoding;
 use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
 
 mod config;
+mod database;
 mod processor;
-use crate::processor::{
-    DriftAccountProcessor, MeteoraDammV2AccountProcessor, MeteoraDammV2InstructionProcessor,
-};
+use crate::processor::MeteoraDammV2AccountProcessor;
 use carbon_log_metrics::LogMetrics;
 use config::ServiceConfig;
 use std::{env, sync::Arc};
