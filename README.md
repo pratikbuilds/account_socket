@@ -4,7 +4,7 @@ WebSocket server for monitoring Solana program accounts in real-time.
 
 ## What It Does
 
-Subscribes to Solana program accounts via Carbon RPC, decodes them, stores in SQLite + Redis, and broadcasts updates to WebSocket clients.
+Subscribes to Solana program accounts via Carbon datapipeline, decodes them, stores in SQLite + Redis, and broadcasts updates to WebSocket clients.
 
 **Currently monitoring:** Meteora DAMM V2 program (can be changed to any Solana program)
 
