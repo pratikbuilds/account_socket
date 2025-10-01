@@ -1,2 +1,24 @@
+# Rust build artifacts
 /target
+Cargo.lock
+
+# Environment variables
 .env
+
+# SQLite database files
+*.db
+*.db-shm
+*.db-wal
+
+# Redis cache dumps
+dump.rdb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
