@@ -1,27 +1,19 @@
 # Account Socket
 
-Real-time Solana program account monitoring via WebSocket using Carbon RPC subscriptions.
+WebSocket server for monitoring Solana program accounts in real-time.
 
-## Overview
+## What It Does
 
-A WebSocket server that monitors Solana program accounts in real-time, decodes them, caches in Redis, stores in SQLite, and broadcasts updates to connected clients.
+Subscribes to Solana program accounts via Carbon RPC, decodes them, stores in SQLite + Redis, and broadcasts updates to WebSocket clients.
 
-**Currently configured for:** Meteora DAMM V2 program accounts (but can be adapted for any Solana program)
-
-## Features
-
-- **Real-time monitoring**: Subscribe to any Solana program's accounts via Carbon RPC
-- **WebSocket API**: Real-time bidirectional communication with subscription management
-- **Caching**: Redis cache for fast account lookups
-- **Persistence**: SQLite database for historical account states
-- **Account decoding**: Automatic account data parsing based on program type
+**Currently monitoring:** Meteora DAMM V2 program (can be changed to any Solana program)
 
 ## Prerequisites
 
-- **Rust** (1.70+) - Install from [rustup.rs](https://rustup.rs/)
-- **Redis** - For caching
-- **SQLite** - For database persistence
-- **Solana RPC endpoint** - With subscription support (e.g., Helius, Triton)
+- Rust 1.70+
+- Redis
+- SQLite
+- Solana RPC endpoint with subscription support
 
 ### Install Dependencies
 
@@ -30,101 +22,63 @@ A WebSocket server that monitors Solana program accounts in real-time, decodes t
 brew install redis sqlite
 ```
 
-**Linux (Ubuntu/Debian):**
+**Linux:**
 ```bash
-sudo apt update
 sudo apt install redis-server sqlite3
 ```
 
-**Windows:**
-- Redis: [Download](https://github.com/microsoftarchive/redis/releases)
-- SQLite: Usually pre-installed or [download](https://sqlite.org/download.html)
-
 ## Setup
 
-### 1. Clone and Install
+### 1. Clone and Build
 
 ```bash
-git clone <repository-url>
+git clone <repo-url>
 cd account_socket
-cargo build --release
+cargo build
 ```
 
-### 2. Configure Environment
+### 2. Configure
 
-Create a `.env` file:
+Create `.env` file:
 
 ```env
-# Required: Solana RPC endpoint
-RPC_URL=wss://mainnet.helius-rpc.com/?api-key=YOUR_API_KEY
-
-# Required: Database
+RPC_URL=wss://mainnet.helius-rpc.com/?api-key=YOUR_KEY
 DATABASE_URL=sqlite:account.db
-
-# Optional: Redis (default shown)
 REDIS_URL=redis://127.0.0.1:6379
-
-# Optional: WebSocket server (defaults shown)
-WEBSOCKET_HOST=127.0.0.1
 WEBSOCKET_PORT=8080
-
-# Optional: Database pool
-DATABASE_MAX_CONNECTIONS=10
-
-# Optional: Logging
-RUST_LOG=info,account_socket=debug
 ```
 
 ### 3. Setup Database
 
 ```bash
-# Install sqlx-cli
 cargo install sqlx-cli --no-default-features --features sqlite
-
-# Run migrations
-sqlx migrate run --database-url sqlite:account.db
+sqlx migrate run
 ```
 
 ### 4. Start Redis
 
 ```bash
-# Start Redis server
 redis-server
-
-# Or run as background service
-brew services start redis  # macOS
-sudo systemctl start redis # Linux
 ```
 
-## Running the Server
+## Run
 
 ```bash
-# Development mode with debug logging
-RUST_LOG=debug cargo run
-
-# Production mode
-cargo run --release
+cargo run
 ```
 
-Server will start on `ws://127.0.0.1:8080/ws`
+Server starts on `ws://127.0.0.1:8080/ws`
 
-## Using the WebSocket API
+## Usage
 
 ### Connect
 
 ```javascript
 const ws = new WebSocket('ws://localhost:8080/ws');
-
-ws.onopen = () => console.log('Connected');
-ws.onmessage = (event) => {
-    const update = JSON.parse(event.data);
-    console.log('Account update:', update);
-};
+ws.onmessage = (event) => console.log(JSON.parse(event.data));
 ```
 
 ### Subscribe to Account
-
-Send a subscription request:
 
 ```javascript
 ws.send(JSON.stringify({
@@ -133,9 +87,9 @@ ws.send(JSON.stringify({
 }));
 ```
 
-You'll immediately receive the current account state (from cache or database), then real-time updates as the account changes.
+Returns current state immediately, then streams updates.
 
-### Unsubscribe from Account
+### Unsubscribe
 
 ```javascript
 ws.send(JSON.stringify({
@@ -148,119 +102,70 @@ ws.send(JSON.stringify({
 
 ```json
 {
-  "pubkey": "CPpeWQrniBd4WARd3kEjS7XP1oxVtD8Fr3hie19F6gXV",
-  "source": "cache",
+  "pubkey": "...",
+  "source": "cache|database|realtime",
   "account": {
-    "id": 123,
-    "pubkey": "CPpeWQrniBd4WARd3kEjS7XP1oxVtD8Fr3hie19F6gXV",
     "slot": 370462731,
     "account_type": "Pool",
-    "owner": "Eo7WjKq67rjJQSZxS6z3YkapzY3eMj6Xy8X5EQVn5UaB",
+    "owner": "...",
     "lamports": 8630400,
-    "data_json": {
-      "pool_fees": { ... },
-      "token_a_mint": "...",
-      "liquidity": "67020350331064650037410477447049",
-      ...
-    },
+    "data_json": { /* decoded account data */ },
     "created_at": "2025-10-01T10:50:05Z"
   }
 }
 ```
 
-**Response fields:**
-- `source`: Where the data came from (`cache`, `database`, or `realtime`)
-- `account_type`: Type of account (Pool, Position, Config, etc.)
-- `data_json`: Decoded account data (structure depends on account type)
+## CLI Testing
 
-## Testing with CLI Tools
-
-### Using wscat
-
+**Using wscat:**
 ```bash
-# Install wscat
 npm install -g wscat
-
-# Connect and subscribe
 wscat -c ws://localhost:8080/ws
 > {"action":"subscribe","pubkey":"CPpeWQrniBd4WARd3kEjS7XP1oxVtD8Fr3hie19F6gXV"}
 ```
 
-### Using websocat
-
+**Using websocat:**
 ```bash
-# Install websocat
 cargo install websocat
-
-# Connect and subscribe
 echo '{"action":"subscribe","pubkey":"CPpeWQrniBd4WARd3kEjS7XP1oxVtD8Fr3hie19F6gXV"}' | websocat ws://localhost:8080/ws
 ```
 
 ## Adapting for Other Programs
 
-Currently configured for **Meteora DAMM V2**. To monitor a different Solana program:
+To monitor a different Solana program:
 
-1. Add the program's decoder dependency to `Cargo.toml`
-2. Update `src/main.rs` to use the new decoder:
-   ```rust
-   RpcProgramSubscribe::new(
-       config.rpc_url.clone(),
-       Filters::new(
-           YOUR_PROGRAM_ID,  // Change this
-           ...
-       ),
-   )
-   ```
-3. Update `src/processor.rs` to handle the new account types
+1. Add decoder to `Cargo.toml`
+2. Update `PROGRAM_ID` in `src/main.rs`
+3. Update account types in `src/processor.rs`
 
 ## Database Queries
 
-### View Recent Updates
-
 ```bash
-sqlite3 account.db "SELECT pubkey, slot, account_type, created_at FROM account_updates ORDER BY created_at DESC LIMIT 10;"
+# Recent updates
+sqlite3 account.db "SELECT pubkey, slot, account_type FROM account_updates ORDER BY created_at DESC LIMIT 10;"
+
+# Account history
+sqlite3 account.db "SELECT slot, account_type FROM account_updates WHERE pubkey = 'YOUR_PUBKEY' ORDER BY slot DESC;"
 ```
 
-### View Account History
-
-```bash
-sqlite3 account.db "SELECT slot, account_type, created_at FROM account_updates WHERE pubkey = 'YOUR_PUBKEY' ORDER BY slot DESC;"
-```
-
-## Architecture
+## How It Works
 
 ```
-Solana RPC (Geyser)
-        ↓
-Carbon Pipeline (Subscribe to Program Accounts)
-        ↓
-Decoder (Parse Account Data)
-        ↓
-Processor → SQLite + Redis
-        ↓
-WebSocket Broadcast → Connected Clients
+Solana RPC → Carbon Pipeline → Decoder → Processor → SQLite + Redis → WebSocket Broadcast
 ```
 
-## Technical Details
-
-- **Cache-aside pattern**: On subscribe, checks Redis → SQLite, then streams real-time updates
-- **JSON serialization**: Uses `serde_json` with `arbitrary_precision` for u128 values
-- **Account types supported**: Pool, Position, Config, ClaimFeeOperator, TokenBadge, Vesting (Meteora DAMM V2)
+- On subscribe: checks Redis → SQLite for current state, then streams real-time updates
+- Uses `serde_json` with `arbitrary_precision` for u128 values
+- Supports account types: Pool, Position, Config, ClaimFeeOperator, TokenBadge, Vesting
 
 ## Troubleshooting
 
-**Redis connection failed:**
+**Redis not running:**
 ```bash
-redis-cli ping  # Should return "PONG"
+redis-cli ping  # should return PONG
 ```
 
-**Database locked:**
-```bash
-# Close any open connections to account.db
-lsof account.db
-```
-
-**No updates received:**
-- Check RPC endpoint is valid and has subscription support
-- Verify the account pubkey is owned by the program you're monitoring
+**No updates:**
+- Check RPC endpoint supports subscriptions
+- Verify account is owned by the program
 - Check logs: `RUST_LOG=debug cargo run`
