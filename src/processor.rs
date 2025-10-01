@@ -57,35 +57,53 @@ impl Processor for MeteoraDammV2AccountProcessor {
             carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Pool(pool_data) => {
                 info!(pubkey = %metadata.pubkey, "🏊 Processing POOL account");
                 // With arbitrary_precision feature, u128 values are serialized as strings
-                ("Pool", serde_json::to_value(&pool_data).unwrap_or(serde_json::Value::Null))
+                (
+                    "Pool",
+                    serde_json::to_value(&pool_data).unwrap_or(serde_json::Value::Null),
+                )
             }
             carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Position(
                 position_data,
             ) => {
                 info!(pubkey = %metadata.pubkey, "📍 Processing POSITION account");
-                ("Position", serde_json::to_value(&position_data).unwrap_or(serde_json::Value::Null))
+                (
+                    "Position",
+                    serde_json::to_value(&position_data).unwrap_or(serde_json::Value::Null),
+                )
             }
             carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Config(config_data) => {
                 info!(pubkey = %metadata.pubkey, "⚙️ Processing CONFIG account");
-                ("Config", serde_json::to_value(&config_data).unwrap_or(serde_json::Value::Null))
+                (
+                    "Config",
+                    serde_json::to_value(&config_data).unwrap_or(serde_json::Value::Null),
+                )
             }
             carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::ClaimFeeOperator(
                 operator_data,
             ) => {
                 info!(pubkey = %metadata.pubkey, "💰 Processing CLAIM FEE OPERATOR account");
-                ("ClaimFeeOperator", serde_json::to_value(&operator_data).unwrap_or(serde_json::Value::Null))
+                (
+                    "ClaimFeeOperator",
+                    serde_json::to_value(&operator_data).unwrap_or(serde_json::Value::Null),
+                )
             }
             carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::TokenBadge(
                 badge_data,
             ) => {
                 info!(pubkey = %metadata.pubkey, "🏆 Processing TOKEN BADGE account");
-                ("TokenBadge", serde_json::to_value(&badge_data).unwrap_or(serde_json::Value::Null))
+                (
+                    "TokenBadge",
+                    serde_json::to_value(&badge_data).unwrap_or(serde_json::Value::Null),
+                )
             }
             carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Vesting(
                 vesting_data,
             ) => {
                 info!(pubkey = %metadata.pubkey, "🔒 Processing VESTING account");
-                ("Vesting", serde_json::to_value(&vesting_data).unwrap_or(serde_json::Value::Null))
+                (
+                    "Vesting",
+                    serde_json::to_value(&vesting_data).unwrap_or(serde_json::Value::Null),
+                )
             }
         };
 
