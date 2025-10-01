@@ -1,68 +1,152 @@
 use async_trait::async_trait;
 use carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account;
-use carbon_meteora_damm_v2_decoder::instructions::MeteoraDammV2Instruction;
 use std::sync::Arc;
+use tracing::{debug, error, info, instrument, warn};
 
 use carbon_core::{
-    account::AccountProcessorInputType, error::Error, instruction::InstructionProcessorInputType,
-    metrics::MetricsCollection, processor::Processor,
+    account::AccountProcessorInputType, error::Error, metrics::MetricsCollection,
+    processor::Processor,
 };
-use carbon_drift_v2_decoder::accounts::DriftAccount;
 
+use crate::cache::RedisCache;
+use crate::database::{Database, NewAccountUpdate};
+use crate::websocket::WebSocketServer;
+
+// Global shared state for processor dependencies
+#[derive(Debug)]
+pub struct ProcessorState {
+    pub database: Arc<Database>,
+    pub cache: Arc<RedisCache>,
+    pub websocket_server: Arc<WebSocketServer>,
+}
+
+// Thread-safe global state
+pub static PROCESSOR_STATE: tokio::sync::OnceCell<ProcessorState> =
+    tokio::sync::OnceCell::const_new();
+
+// Unit struct for Carbon pipeline compatibility
 pub struct MeteoraDammV2AccountProcessor;
 
 #[async_trait]
 impl Processor for MeteoraDammV2AccountProcessor {
     type InputType = AccountProcessorInputType<MeteoraDammV2Account>;
 
+    #[instrument(skip(self, input, _metrics), fields(pubkey = %input.0.pubkey, slot = input.0.slot))]
     async fn process(
         &mut self,
         input: Self::InputType,
-        metrics: Arc<MetricsCollection>,
+        _metrics: Arc<MetricsCollection>,
     ) -> Result<(), Error> {
-        println!("IN the process");
         let (metadata, decoded_account, solana_account) = input;
 
-        println!("=== Account Update ===");
-        println!("Account: {}", metadata.pubkey);
-        println!("Slot: {}", metadata.slot);
+        info!(
+            pubkey = %metadata.pubkey,
+            slot = metadata.slot,
+            lamports = solana_account.lamports,
+            owner = %solana_account.owner,
+            "🔄 Processing Meteora DAMM V2 account update"
+        );
 
-        println!("Owner: {}", solana_account.owner);
-        println!("Lamports: {}", solana_account.lamports);
+        // Get global state (should always be initialized by main.rs)
+        let state = PROCESSOR_STATE
+            .get()
+            .expect("Processor state not initialized");
 
-        println!("Decoded Account Lamports: {}", decoded_account.lamports);
-        println!("Decoded Account Owner: {}", decoded_account.owner);
-
-        match decoded_account.data {
-            carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Pool(pool) => {
-                // println!("🏊 POOL ACCOUNT FOUND!");
-                // println!("Pool: {:?}", pool);
+        // Determine account type and serialize the actual data
+        let (account_type, account_json) = match decoded_account.data {
+            carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Pool(pool_data) => {
+                info!(pubkey = %metadata.pubkey, "🏊 Processing POOL account");
+                // With arbitrary_precision feature, u128 values are serialized as strings
+                ("Pool", serde_json::to_value(&pool_data).unwrap_or(serde_json::Value::Null))
             }
-            carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Position(position) => {
-                println!("📍 POSITION ACCOUNT FOUND!");
-                println!("Position: {:?}", position);
+            carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Position(
+                position_data,
+            ) => {
+                info!(pubkey = %metadata.pubkey, "📍 Processing POSITION account");
+                ("Position", serde_json::to_value(&position_data).unwrap_or(serde_json::Value::Null))
             }
-            carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Config(config) => {
-                println!("⚙️ CONFIG ACCOUNT FOUND!");
-                // println!("Config: {:?}", config);
+            carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Config(config_data) => {
+                info!(pubkey = %metadata.pubkey, "⚙️ Processing CONFIG account");
+                ("Config", serde_json::to_value(&config_data).unwrap_or(serde_json::Value::Null))
             }
             carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::ClaimFeeOperator(
-                operator,
+                operator_data,
             ) => {
-                println!("💰 CLAIM FEE OPERATOR FOUND!");
-                // println!("Claim Fee Operator: {:?}", operator);
+                info!(pubkey = %metadata.pubkey, "💰 Processing CLAIM FEE OPERATOR account");
+                ("ClaimFeeOperator", serde_json::to_value(&operator_data).unwrap_or(serde_json::Value::Null))
             }
-            carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::TokenBadge(badge) => {
-                println!("🏆 TOKEN BADGE FOUND!");
-                // println!("Token Badge: {:?}", badge);
+            carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::TokenBadge(
+                badge_data,
+            ) => {
+                info!(pubkey = %metadata.pubkey, "🏆 Processing TOKEN BADGE account");
+                ("TokenBadge", serde_json::to_value(&badge_data).unwrap_or(serde_json::Value::Null))
             }
-            carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Vesting(vesting) => {
-                println!("🔒 VESTING ACCOUNT FOUND!");
-                // println!("Vesting: {:?}", vesting);
+            carbon_meteora_damm_v2_decoder::accounts::MeteoraDammV2Account::Vesting(
+                vesting_data,
+            ) => {
+                info!(pubkey = %metadata.pubkey, "🔒 Processing VESTING account");
+                ("Vesting", serde_json::to_value(&vesting_data).unwrap_or(serde_json::Value::Null))
+            }
+        };
+
+        info!(account_type = %account_type, account_json = %account_json, "💾 Inserting account update into database");
+
+        // Create database record
+        let new_account_update = NewAccountUpdate {
+            pubkey: metadata.pubkey.to_string(),
+            slot: metadata.slot,
+            account_type: account_type.to_string(),
+            owner: solana_account.owner.to_string(),
+            lamports: solana_account.lamports,
+            data_json: account_json,
+        };
+
+        // Store in database
+        // debug!(
+        //     pubkey = %metadata.pubkey,
+        //     account_type,
+        //     slot = metadata.slot,
+        //     "💾 Inserting account update into database"
+        // );
+
+        match state
+            .database
+            .insert_account_update(new_account_update)
+            .await
+        {
+            Ok(account_update) => {
+                // Update cache
+
+                if let Err(e) = state
+                    .cache
+                    .set_account(&metadata.pubkey.to_string(), &account_update)
+                    .await
+                {
+                    warn!(
+                        pubkey = %metadata.pubkey,
+                        error = %e,
+                        "⚠️ Failed to cache account in Redis"
+                    );
+                } else {
+                    debug!(pubkey = %metadata.pubkey, "✅ Account cached successfully");
+                }
+
+                // Broadcast to WebSocket clients
+                debug!(pubkey = %metadata.pubkey, "📡 Broadcasting account update to WebSocket clients");
+                state
+                    .websocket_server
+                    .broadcast_account_update(&metadata.pubkey.to_string(), &account_update)
+                    .await;
+            }
+            Err(e) => {
+                error!(
+                    pubkey = %metadata.pubkey,
+                    account_type,
+                    error = %e,
+                    "❌ Failed to store account in database"
+                );
             }
         }
-
-        println!("===================");
 
         Ok(())
     }
